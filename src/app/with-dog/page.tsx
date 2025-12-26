@@ -1,21 +1,27 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { setUserStage } from '@/lib/storage';
+import DailyFocusCard from '@/components/DailyFocusCard';
+import DailyCardBentoTab from '@/components/DailyCardBentoTab';
+import DailyCardOverlay from '@/components/DailyCardOverlay';
+import ChatMessageBubble from '@/components/ChatMessageBubble';
+import ChatInputArea from '@/components/ChatInputArea';
+import DogInfoModal from '@/components/DogInfoModal';
 
 // TypeScript类型定义
 interface DogInfo {
-  breed: string;           // 犬种
-  ageMonths: string;       // 月龄区间（"1-3" / "4-6" / "6-12" / "12+" / "未知"）
-  companionHours: string;  // 陪伴时间（"≤1h" / "2-3h" / "4-8h" / "≥8h"）
-  daysHome: number;        // 到家天数（1-30）
+  breed: string;
+  ageMonths: string;
+  companionHours: string;
+  daysHome: number;
 }
 
 interface DailyCard {
-  focus: string;           // 今天最需要关注的事
-  forbidden: string;       // 今天容易犯的错误
-  reason: string;          // 为什么
+  focus: string;
+  forbidden: string;
+  reason: string;
 }
 
 interface Message {
@@ -25,6 +31,8 @@ interface Message {
 
 export default function WithDogPage() {
   const router = useRouter();
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const dailyCardRef = useRef<HTMLDivElement>(null);
 
   // State管理
   const [dogInfo, setDogInfo] = useState<DogInfo | null>(null);
@@ -36,13 +44,18 @@ export default function WithDogPage() {
   const [isGeneratingCard, setIsGeneratingCard] = useState(false);
   const [error, setError] = useState('');
 
+  // 状态机：今日卡片显示状态
+  const [showFloatingCard, setShowFloatingCard] = useState(false);
+  const [showOverlay, setShowOverlay] = useState(false);
 
-  // 页面加载时：检查localStorage并重定向到表单页面（如果需要）
+  // 信息表单弹窗状态
+  const [showInfoModal, setShowInfoModal] = useState(false);
+
+  // 页面加载时：检查localStorage并显示表单弹窗（如果需要）
   useEffect(() => {
     const savedDogInfo = localStorage.getItem('petbrain_dog_info');
 
     if (savedDogInfo) {
-      // 已有数据，直接加载
       try {
         const parsed = JSON.parse(savedDogInfo);
         setDogInfo(parsed);
@@ -53,7 +66,6 @@ export default function WithDogPage() {
         const today = new Date().toDateString();
 
         if (savedDailyCard && savedCardDate === today) {
-          // 有今天的卡片，直接加载
           try {
             const parsedCard = JSON.parse(savedDailyCard);
             setDailyCard(parsedCard);
@@ -61,23 +73,20 @@ export default function WithDogPage() {
             console.error('Failed to parse daily card:', error);
           }
         }
-        // 注意：不在这里自动生成卡片，让用户手动点击或在首次对话时生成
       } catch (error) {
         console.error('Failed to parse dog info from localStorage:', error);
-        // 数据损坏，重定向到表单页面
-        router.push('/with-dog/edit-info');
+        setShowInfoModal(true);
       }
     } else {
-      // 首次进入，重定向到表单页面
-      router.push('/with-dog/edit-info');
+      // 新用户：直接打开表单弹窗
+      setShowInfoModal(true);
     }
-  }, [router]);
+  }, []);
 
-  // 监听页面可见性变化，在返回页面时重新加载数据
+  // 监听页面可见性变化
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (!document.hidden) {
-        // 页面重新可见时，重新从localStorage加载数据
         const savedDogInfo = localStorage.getItem('petbrain_dog_info');
         if (savedDogInfo) {
           try {
@@ -96,25 +105,48 @@ export default function WithDogPage() {
     };
   }, []);
 
-  // 导航到修改信息页面
+  // 使用Intersection Observer检测今日卡片是否在视口内
+  useEffect(() => {
+    const dailyCardElement = dailyCardRef.current;
+    if (!dailyCardElement) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        // 当卡片不可见时（向下滚动，卡片滚出视口），显示悬浮按钮
+        setShowFloatingCard(!entry.isIntersecting);
+      },
+      {
+        root: scrollContainerRef.current,
+        threshold: 0, // 卡片完全离开视口时触发
+        rootMargin: '-100px 0px 0px 0px', // 向下滚动100px后触发
+      }
+    );
+
+    observer.observe(dailyCardElement);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [dailyCard]);
+
+  // 打开信息表单弹窗
   const handleEditInfo = () => {
-    router.push('/with-dog/edit-info');
+    setShowInfoModal(true);
+  };
+
+  // 保存狗狗信息（从弹窗提交）
+  const handleSaveDogInfo = (data: DogInfo) => {
+    localStorage.setItem('petbrain_dog_info', JSON.stringify(data));
+    setDogInfo(data);
+    setShowInfoModal(false);
   };
 
   // 解析今日卡片内容
   const parseDailyCard = (content: string): boolean => {
     try {
-      console.log('开始解析卡片内容...');
-
-      // 使用更灵活的正则提取三个部分
-      // 匹配 "✅ 今天最需要关注的事" 或 "✅ 今天最需要关注的事："
       const focusMatch = content.match(/✅\s*今天最需要关注的事[：:]?\s*\n([\s\S]*?)(?=\n*❌|$)/);
       const forbiddenMatch = content.match(/❌\s*今天容易犯的错误[：:]?\s*\n([\s\S]*?)(?=\n*ℹ️|$)/);
       const reasonMatch = content.match(/ℹ️\s*为什么[：:]?\s*\n([\s\S]*?)$/);
-
-      console.log('focusMatch:', focusMatch);
-      console.log('forbiddenMatch:', forbiddenMatch);
-      console.log('reasonMatch:', reasonMatch);
 
       if (focusMatch && forbiddenMatch && reasonMatch) {
         const dailyCardData: DailyCard = {
@@ -123,20 +155,12 @@ export default function WithDogPage() {
           reason: reasonMatch[1].trim(),
         };
 
-        console.log('解析成功，卡片数据：', dailyCardData);
-
         setDailyCard(dailyCardData);
-
-        // 保存到localStorage，避免刷新后丢失
         localStorage.setItem('petbrain_daily_card', JSON.stringify(dailyCardData));
         localStorage.setItem('petbrain_daily_card_date', new Date().toDateString());
-
         return true;
-      } else {
-        console.error('解析失败：正则匹配不成功');
-        console.error('原始内容：', content);
-        return false;
       }
+      return false;
     } catch (error) {
       console.error('解析卡片时发生错误:', error);
       return false;
@@ -153,31 +177,25 @@ export default function WithDogPage() {
     router.push(routeMap[stage]);
   };
 
-  // 发送消息（支持传递generateDailyCard参数）
+  // 发送消息
   const handleSend = async (generateDailyCard = false) => {
     if (!inputValue.trim() && !generateDailyCard) return;
     if (!dogInfo) return;
 
     const userMessage = inputValue.trim();
+    const actualMessage = generateDailyCard ? '你好，请生成今日卡片' : userMessage;
 
-    // 如果是生成今日卡片，使用特殊消息
-    const actualMessage = generateDailyCard
-      ? '你好，请生成今日卡片'
-      : userMessage;
-
-    // 只在普通对话时添加用户消息到对话历史
     if (!generateDailyCard) {
       const newUserMessage: Message = {
         role: 'user',
         content: actualMessage,
       };
-      setMessages(prev => [...prev, newUserMessage]);
+      setMessages((prev) => [...prev, newUserMessage]);
     }
 
     setInputValue('');
     setError('');
 
-    // 设置不同的loading状态
     if (generateDailyCard) {
       setIsGeneratingCard(true);
     } else {
@@ -205,28 +223,22 @@ export default function WithDogPage() {
         return;
       }
 
-      // 保存 conversation_id
       if (data.conversation_id) {
         setConversationId(data.conversation_id);
       }
 
-      // 如果是生成今日卡片，解析并保存卡片内容
       if (generateDailyCard) {
-        console.log('尝试解析今日卡片，AI回复内容：', data.answer);
         const parseSuccess = parseDailyCard(data.answer);
         if (!parseSuccess) {
-          // 解析失败，显示错误信息
           setError('今日卡片生成失败，请重试');
         }
       } else {
-        // 普通对话，添加AI回复到对话历史
         const newAssistantMessage: Message = {
           role: 'assistant',
           content: data.answer,
         };
-        setMessages(prev => [...prev, newAssistantMessage]);
+        setMessages((prev) => [...prev, newAssistantMessage]);
       }
-
     } catch (err) {
       setError('网络错误，请稍后再试');
       console.error('Send message error:', err);
@@ -239,165 +251,143 @@ export default function WithDogPage() {
     }
   };
 
-  // 处理Enter键发送
-  const handleKeyPress = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
-    }
-  };
+  const hasCard = !!(dailyCard?.focus || dailyCard?.forbidden || dailyCard?.reason);
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* 主界面 */}
+    <div className="h-screen flex flex-col bg-[#FAFAFA]">
       {dogInfo && (
-        <div className="min-h-screen p-8">
-          <div className="max-w-3xl mx-auto">
-            {/* 页面标题和介绍 */}
-            <div className="mb-8">
-              <h1 className="text-3xl font-semibold mb-4">
-                狗狗已经到家，不要焦虑，一起度过30天
-              </h1>
-              <p className="text-gray-600">
-                你正处于陪伴阶段，我会帮助你关注重要的事情，避免常见的错误
-              </p>
-              <button
-                onClick={handleEditInfo}
-                className="mt-2 text-sm text-blue-600 hover:text-blue-700 underline"
-              >
-                修改狗狗信息
-              </button>
-            </div>
-
-            {/* 今日上下文卡片区域 */}
-            <div className="mb-8 p-6 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg border border-blue-100">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-semibold text-gray-900">
-                  今天要关注的事
+        <>
+          {/* Sticky Header - 一行三段式 */}
+          <div className="sticky top-0 z-50 bg-[#FAFAFA] border-b-[1.5px] border-[#E5E5E5]">
+            <div className="max-w-2xl mx-auto px-4 py-4">
+              <div className="flex items-center justify-between">
+                {/* 左侧：标题 */}
+                <h2 className="text-2xl font-semibold text-[#1A1A1A]">
+                  陪伴阶段
                 </h2>
-                {!dailyCard && !isGeneratingCard && (
-                  <button
-                    onClick={() => handleSend(true)}
-                    disabled={isLoading || isGeneratingCard}
-                    className="px-4 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
-                  >
-                    生成今日卡片
-                  </button>
-                )}
-              </div>
-              {isGeneratingCard ? (
-                <div className="text-center py-8">
-                  <p className="text-gray-600">正在生成今日卡片...</p>
+
+                {/* 中间：天数标签（深灰圆形） */}
+                <div className="flex-1 flex justify-center">
+                  <span className="inline-flex items-center justify-center px-3 py-1 bg-[#1A1A1A] text-white text-sm font-medium rounded-full">
+                    第 {dogInfo?.daysHome || 1} 天
+                  </span>
                 </div>
-              ) : dailyCard ? (
-                <div className="space-y-4">
-                  <div>
-                    <h3 className="font-medium text-gray-700 mb-1">✅ 最需要关注：</h3>
-                    <p className="text-gray-800">{dailyCard.focus}</p>
-                  </div>
-                  <div>
-                    <h3 className="font-medium text-gray-700 mb-1">❌ 容易犯的错误：</h3>
-                    <p className="text-gray-800">{dailyCard.forbidden}</p>
-                  </div>
-                  <div>
-                    <h3 className="font-medium text-gray-700 mb-1">ℹ️ 为什么：</h3>
-                    <p className="text-gray-800">{dailyCard.reason}</p>
-                  </div>
-                </div>
-              ) : (
-                <p className="text-gray-600">
-                  点击"生成今日卡片"，我会根据你的狗狗信息生成今天需要关注的重点
-                </p>
-              )}
-            </div>
 
-            {/* 对话历史区 */}
-            {messages.length > 0 && (
-              <div className="mb-8 space-y-4">
-                {messages.map((message, index) => (
-                  <div
-                    key={index}
-                    className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                  >
-                    <div
-                      className={`max-w-[80%] p-4 rounded-lg ${
-                        message.role === 'user'
-                          ? 'bg-gray-900 text-white'
-                          : 'bg-gradient-to-br from-blue-50 to-indigo-50 text-gray-800 border border-blue-100'
-                      }`}
-                    >
-                      <div className="whitespace-pre-wrap">{message.content}</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Loading状态 */}
-            {isLoading && (
-              <div className="mb-8 flex justify-start">
-                <div className="max-w-[80%] p-4 rounded-lg bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-100">
-                  <p className="text-gray-600">正在思考...</p>
-                </div>
-              </div>
-            )}
-
-            {/* 错误提示 */}
-            {error && (
-              <div className="mb-8 p-4 bg-red-50 rounded-lg border border-red-200">
-                <p className="text-red-600">{error}</p>
-              </div>
-            )}
-
-            {/* 输入区 */}
-            <div className="mb-12">
-              <div className="space-y-3">
-                <textarea
-                  value={inputValue}
-                  onChange={(e) => setInputValue(e.target.value)}
-                  onKeyPress={handleKeyPress}
-                  placeholder="有什么问题或担心的事吗？随时告诉我..."
-                  className="w-full p-4 border border-gray-300 rounded-lg resize-none focus:outline-none focus:border-gray-500 focus:ring-2 focus:ring-gray-200"
-                  rows={4}
-                  disabled={isLoading}
-                />
-                <div className="flex items-center justify-between">
-                  <p className="text-sm text-gray-500">
-                    按 Enter 发送，Shift + Enter 换行
-                  </p>
-                  <button
-                    onClick={() => handleSend(false)}
-                    disabled={isLoading || !inputValue.trim()}
-                    className="px-6 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
-                  >
-                    {isLoading ? '发送中...' : '发送'}
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* 阶段切换旁路提示 */}
-            <div className="mt-24 pt-8 border-t border-gray-200">
-              <p className="text-sm text-gray-400 mb-2">
-                如果情况有变，你可以：
-              </p>
-              <div className="flex gap-4 text-sm">
+                {/* 右侧：修改信息 */}
                 <button
-                  onClick={() => handleStageSwitch('explore')}
-                  className="text-gray-400 hover:text-gray-600 underline"
+                  onClick={handleEditInfo}
+                  className="text-sm text-[#666666] hover:text-[#1A1A1A] underline decoration-1 underline-offset-2 transition-colors duration-200"
                 >
-                  回到探索阶段
-                </button>
-                <button
-                  onClick={() => handleStageSwitch('prep')}
-                  className="text-gray-400 hover:text-gray-600 underline"
-                >
-                  回到准备阶段
+                  修改信息
                 </button>
               </div>
             </div>
           </div>
-        </div>
+
+          {/* Bento Tab（右侧边缘） */}
+          {showFloatingCard && hasCard && (
+            <DailyCardBentoTab onClick={() => setShowOverlay(true)} />
+          )}
+
+          {/* Overlay展开态 */}
+          {showOverlay && (
+            <DailyCardOverlay
+              focus={dailyCard?.focus}
+              forbidden={dailyCard?.forbidden}
+              reason={dailyCard?.reason}
+              onClose={() => setShowOverlay(false)}
+            />
+          )}
+
+          {/* 可滚动内容区域 */}
+          <div
+            ref={scrollContainerRef}
+            className="flex-1 overflow-y-auto"
+          >
+            <div className="max-w-2xl mx-auto px-4 py-8 space-y-8">
+
+              {/* 今日卡片（初始态，顶部） */}
+              <DailyFocusCard
+                ref={dailyCardRef}
+                focus={dailyCard?.focus}
+                forbidden={dailyCard?.forbidden}
+                reason={dailyCard?.reason}
+                isLoading={isGeneratingCard}
+                onGenerate={() => handleSend(true)}
+              />
+
+              {/* 对话历史 */}
+              {messages.length > 0 && (
+                <div className="space-y-4">
+                  {messages.map((message, index) => (
+                    <ChatMessageBubble
+                      key={index}
+                      role={message.role}
+                      content={message.content}
+                    />
+                  ))}
+                </div>
+              )}
+
+              {/* Loading状态 */}
+              {isLoading && (
+                <div className="flex justify-start">
+                  <div className="px-4 py-2.5 bg-white border border-[#E5E5E5] rounded-lg">
+                    <p className="text-sm text-[#A3A3A3]">正在思考...</p>
+                  </div>
+                </div>
+              )}
+
+              {/* 错误提示 */}
+              {error && (
+                <div className="p-3 bg-white border border-[#DC2626] rounded-lg">
+                  <p className="text-sm text-[#DC2626]">{error}</p>
+                </div>
+              )}
+
+              {/* 底部留白（为固定输入框留空间） */}
+              <div className="h-40" />
+            </div>
+          </div>
+
+          {/* 固定底部输入框 + 阶段导航 */}
+          <div className="border-t border-[#E5E5E5] bg-[#FAFAFA]">
+            <div className="max-w-2xl mx-auto px-4 py-4 space-y-3">
+              {/* 输入区 */}
+              <ChatInputArea
+                value={inputValue}
+                onChange={setInputValue}
+                onSubmit={() => handleSend(false)}
+                isLoading={isLoading}
+              />
+
+              {/* 阶段分流入口（输入框正下方） */}
+              <div className="flex items-center gap-4 text-sm">
+                <button
+                  onClick={() => handleStageSwitch('explore')}
+                  className="text-[#A3A3A3] hover:text-[#666666] transition-colors duration-200"
+                >
+                  ← 回到探索
+                </button>
+                <span className="text-[#E5E5E5]">|</span>
+                <button
+                  onClick={() => handleStageSwitch('prep')}
+                  className="text-[#A3A3A3] hover:text-[#666666] transition-colors duration-200"
+                >
+                  ← 回到准备
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* 信息表单弹窗 */}
+          <DogInfoModal
+            isOpen={showInfoModal}
+            onClose={() => setShowInfoModal(false)}
+            initialData={dogInfo || undefined}
+            onSubmit={handleSaveDogInfo}
+          />
+        </>
       )}
     </div>
   );
