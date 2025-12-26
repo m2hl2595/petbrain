@@ -31,7 +31,7 @@ export interface DogInfo {
   breed: string;
   age_months: string;
   companion_hours: string;
-  days_home: number;
+  home_date: string; // 到家日期 (YYYY-MM-DD)
   created_at: string;
   updated_at: string;
 }
@@ -70,6 +70,11 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey);
  * 3. 返回user_id
  */
 export async function getOrCreateUser(): Promise<string> {
+  // 检查是否在浏览器环境
+  if (typeof window === 'undefined') {
+    throw new Error('getOrCreateUser can only be called in browser environment');
+  }
+
   // 检查localStorage中是否已有user_id
   const storedUserId = localStorage.getItem('petbrain_user_id');
 
@@ -108,6 +113,9 @@ export async function getOrCreateUser(): Promise<string> {
  * 清除用户数据（用于测试或重置）
  */
 export function clearUserData(): void {
+  if (typeof window === 'undefined') {
+    return;
+  }
   localStorage.removeItem('petbrain_user_id');
   localStorage.removeItem('petbrain_current_stage');
 }
@@ -159,7 +167,9 @@ export async function updateUserStage(
   }
 
   // 同步到localStorage（用于快速访问）
-  localStorage.setItem('petbrain_current_stage', stage);
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('petbrain_current_stage', stage);
+  }
 }
 
 // ============================================

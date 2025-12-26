@@ -58,9 +58,8 @@ export default function BentoStageCard({
 
   return (
     <div
-      className="group relative overflow-hidden rounded-3xl transition-all duration-300"
+      className="group relative overflow-hidden rounded-3xl transition-all duration-300 min-h-[320px]"
       style={{
-        flex: isExpanded ? 3 : 1,
         backgroundColor: isExpanded ? lightThemeBg : '#FFFFFF',
         border: isExpanded ? 'none' : '1.5px solid #E5E5E5',
         boxShadow: isExpanded
@@ -76,13 +75,13 @@ export default function BentoStageCard({
       role="button"
       aria-expanded={isExpanded}
     >
-      <div className="p-8 md:p-10 h-full flex flex-col">
+      <div className="p-8 h-full flex flex-col">
         {/* 阶段标题 */}
-        <div className="space-y-2">
-          <h3 className="text-2xl md:text-3xl font-bold text-[#1A1A1A]">
+        <div className="space-y-3">
+          <h3 className="text-2xl font-bold text-[#1A1A1A]">
             {stageNumber}. {title}
           </h3>
-          <p className="text-base md:text-lg text-[#666666] font-medium">
+          <p className="text-base lg:text-lg text-[#666666] font-medium leading-snug">
             {subtitle}
           </p>
         </div>
@@ -99,7 +98,7 @@ export default function BentoStageCard({
             transitionTimingFunction: 'cubic-bezier(0.25, 0.8, 0.25, 1)',
           }}
         >
-          <p className="text-sm md:text-base text-[#666666] leading-relaxed">
+          <p className="text-base text-[#666666] leading-relaxed">
             {description}
           </p>
         </div>

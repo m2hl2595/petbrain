@@ -76,7 +76,7 @@ export default function Home() {
 
       {/* 阶段选择区域 */}
       <section className="w-full py-16 md:py-20 bg-white">
-        <div className="max-w-6xl mx-auto px-6 md:px-8">
+        <div className="max-w-7xl mx-auto px-4 md:px-6">
           {/* 区块标题 */}
           <div className="text-center mb-12">
             <h2 className="text-2xl md:text-3xl font-bold text-[#1A1A1A] mb-4">
@@ -87,26 +87,24 @@ export default function Home() {
             </p>
           </div>
 
-          {/* Bento 手风琴卡片 - 容器约束 (max-width: 1024px) */}
-          <div className="max-w-[1024px] mx-auto">
-            <div className="flex flex-col md:flex-row gap-6 md:gap-4">
-              {stages.map((stage) => (
-                <BentoStageCard
-                  key={stage.id}
-                  stageNumber={stage.id}
-                  title={stage.title}
-                  subtitle={stage.subtitle}
-                  description={stage.description}
-                  buttonText={stage.buttonText}
-                  themeColor={stage.themeColor}
-                  onClick={() => handleStageSelect(stage.stage)}
-                  isActive={activeCard === stage.id}
-                  onHover={(isHovered) => {
-                    setActiveCard(isHovered ? stage.id : null);
-                  }}
-                />
-              ))}
-            </div>
+          {/* Bento 手风琴卡片 - 扩充至 max-w-7xl + 响应式网格 */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            {stages.map((stage) => (
+              <BentoStageCard
+                key={stage.id}
+                stageNumber={stage.id}
+                title={stage.title}
+                subtitle={stage.subtitle}
+                description={stage.description}
+                buttonText={stage.buttonText}
+                themeColor={stage.themeColor}
+                onClick={() => handleStageSelect(stage.stage)}
+                isActive={activeCard === stage.id}
+                onHover={(isHovered) => {
+                  setActiveCard(isHovered ? stage.id : null);
+                }}
+              />
+            ))}
           </div>
         </div>
       </section>

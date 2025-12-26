@@ -11,6 +11,8 @@ export default function EditDogInfoPage() {
 
   // 页面加载时：从localStorage读取数据
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+
     const savedDogInfo = localStorage.getItem('petbrain_dog_info');
 
     if (savedDogInfo) {
@@ -29,6 +31,8 @@ export default function EditDogInfoPage() {
 
   // 提交表单
   const handleSubmit = (data: DogInfo) => {
+    if (typeof window === 'undefined') return;
+
     // 存储到localStorage
     localStorage.setItem('petbrain_dog_info', JSON.stringify(data));
     localStorage.setItem('petbrain_last_visit_date', new Date().toDateString());

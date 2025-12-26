@@ -9,14 +9,37 @@ import DailyCardOverlay from '@/components/DailyCardOverlay';
 import ChatMessageBubble from '@/components/ChatMessageBubble';
 import ChatInputArea from '@/components/ChatInputArea';
 import DogInfoModal from '@/components/DogInfoModal';
+import {
+  getOrCreateUser,
+  getDogInfo,
+  saveDogInfo as saveToSupabase,
+  getTodayCard,
+  saveTodayCard,
+} from '@/lib/supabase';
 
 // TypeScript类型定义
 interface DogInfo {
   breed: string;
   ageMonths: string;
   companionHours: string;
-  daysHome: number;
+  homeDate: string; // 到家日期 (YYYY-MM-DD)
+  daysHome?: number; // 自动计算的天数（可选，用于显示）
 }
+
+// 工具函数：计算到家天数
+const calculateDaysHome = (homeDate: string): number => {
+  const home = new Date(homeDate);
+  const today = new Date();
+
+  // 重置时间为0点，只比较日期
+  home.setHours(0, 0, 0, 0);
+  today.setHours(0, 0, 0, 0);
+
+  const diffTime = today.getTime() - home.getTime();
+  const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+  return diffDays + 1; // +1 因为到家当天算第1天
+};
 
 interface DailyCard {
   focus: string;
@@ -35,7 +58,9 @@ export default function WithDogPage() {
   const dailyCardRef = useRef<HTMLDivElement>(null);
 
   // State管理
+  const [userId, setUserId] = useState<string | null>(null);
   const [dogInfo, setDogInfo] = useState<DogInfo | null>(null);
+  const [extractedInfo, setExtractedInfo] = useState<Partial<DogInfo> | undefined>(undefined);
   const [dailyCard, setDailyCard] = useState<DailyCard | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
@@ -51,39 +76,134 @@ export default function WithDogPage() {
   // 信息表单弹窗状态
   const [showInfoModal, setShowInfoModal] = useState(false);
 
-  // 页面加载时：检查localStorage并显示表单弹窗（如果需要）
+  // 加载提取的狗狗信息（用于表单初始值）
   useEffect(() => {
-    const savedDogInfo = localStorage.getItem('petbrain_dog_info');
+    if (typeof window !== 'undefined') {
+      const savedExtractedInfo = localStorage.getItem('extracted_dog_info');
+      if (savedExtractedInfo) {
+        try {
+          const parsed = JSON.parse(savedExtractedInfo);
+          setExtractedInfo({
+            breed: parsed.breed || '',
+            ageMonths: parsed.ageMonths || '',
+            companionHours: parsed.companionHours || '',
+            homeDate: new Date().toISOString().split('T')[0],
+          });
+        } catch (error) {
+          console.error('Failed to parse extracted info:', error);
+        }
+      }
+    }
+  }, []);
 
-    if (savedDogInfo) {
+  // 页面加载时：初始化用户并加载数据
+  useEffect(() => {
+    const initializeUser = async () => {
       try {
-        const parsed = JSON.parse(savedDogInfo);
-        setDogInfo(parsed);
+        // 步骤1：获取或创建用户
+        const uid = await getOrCreateUser();
+        setUserId(uid);
+        console.log('✅ 用户ID:', uid);
 
-        // 检查今日卡片
+        // 步骤2：从 Supabase 加载狗狗信息
+        const dbDogInfo = await getDogInfo(uid);
+
+        if (dbDogInfo) {
+          // 转换格式：Supabase → 前端
+          const frontendDogInfo: DogInfo = {
+            breed: dbDogInfo.breed,
+            ageMonths: dbDogInfo.age_months,
+            companionHours: dbDogInfo.companion_hours,
+            homeDate: dbDogInfo.home_date,
+            daysHome: calculateDaysHome(dbDogInfo.home_date),
+          };
+
+          setDogInfo(frontendDogInfo);
+          console.log('✅ 从 Supabase 加载狗狗信息:', frontendDogInfo);
+
+          // 同步到 localStorage（用于离线降级）
+          localStorage.setItem('petbrain_dog_info', JSON.stringify(frontendDogInfo));
+        } else {
+          // Supabase 没有数据，尝试从 localStorage 读取
+          const savedDogInfo = localStorage.getItem('petbrain_dog_info');
+
+          if (savedDogInfo) {
+            const parsed = JSON.parse(savedDogInfo);
+
+            // 自动计算当前天数
+            if (parsed.homeDate) {
+              parsed.daysHome = calculateDaysHome(parsed.homeDate);
+            }
+
+            setDogInfo(parsed);
+            console.log('⚠️ 从 localStorage 加载狗狗信息（Supabase 无数据）');
+          } else {
+            // 完全新用户：打开表单弹窗
+            console.log('📝 新用户：打开信息表单');
+            setShowInfoModal(true);
+          }
+        }
+
+        // 步骤3：从 Supabase 加载今日卡片
+        const todayCard = await getTodayCard(uid);
+
+        if (todayCard) {
+          const frontendCard: DailyCard = {
+            focus: todayCard.focus,
+            forbidden: todayCard.forbidden,
+            reason: todayCard.reason,
+          };
+
+          setDailyCard(frontendCard);
+          console.log('✅ 从 Supabase 加载今日卡片');
+
+          // 同步到 localStorage
+          localStorage.setItem('petbrain_daily_card', JSON.stringify(frontendCard));
+          localStorage.setItem('petbrain_daily_card_date', new Date().toDateString());
+        } else {
+          // Supabase 没有今日卡片，尝试从 localStorage 读取
+          const savedDailyCard = localStorage.getItem('petbrain_daily_card');
+          const savedCardDate = localStorage.getItem('petbrain_daily_card_date');
+          const today = new Date().toDateString();
+
+          if (savedDailyCard && savedCardDate === today) {
+            const parsedCard = JSON.parse(savedDailyCard);
+            setDailyCard(parsedCard);
+            console.log('⚠️ 从 localStorage 加载今日卡片（Supabase 无数据）');
+          }
+        }
+      } catch (error) {
+        console.error('❌ 初始化失败，降级到 localStorage:', error);
+
+        // 降级方案：完全使用 localStorage
+        const savedDogInfo = localStorage.getItem('petbrain_dog_info');
+
+        if (savedDogInfo) {
+          const parsed = JSON.parse(savedDogInfo);
+
+          if (parsed.homeDate) {
+            parsed.daysHome = calculateDaysHome(parsed.homeDate);
+          }
+
+          setDogInfo(parsed);
+        } else {
+          setShowInfoModal(true);
+        }
+
         const savedDailyCard = localStorage.getItem('petbrain_daily_card');
         const savedCardDate = localStorage.getItem('petbrain_daily_card_date');
         const today = new Date().toDateString();
 
         if (savedDailyCard && savedCardDate === today) {
-          try {
-            const parsedCard = JSON.parse(savedDailyCard);
-            setDailyCard(parsedCard);
-          } catch (error) {
-            console.error('Failed to parse daily card:', error);
-          }
+          setDailyCard(JSON.parse(savedDailyCard));
         }
-      } catch (error) {
-        console.error('Failed to parse dog info from localStorage:', error);
-        setShowInfoModal(true);
       }
-    } else {
-      // 新用户：直接打开表单弹窗
-      setShowInfoModal(true);
-    }
+    };
+
+    initializeUser();
   }, []);
 
-  // 监听页面可见性变化
+  // 监听页面可见性变化（刷新天数）
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (!document.hidden) {
@@ -91,6 +211,12 @@ export default function WithDogPage() {
         if (savedDogInfo) {
           try {
             const parsed = JSON.parse(savedDogInfo);
+
+            // 自动计算当前天数
+            if (parsed.homeDate) {
+              parsed.daysHome = calculateDaysHome(parsed.homeDate);
+            }
+
             setDogInfo(parsed);
           } catch (error) {
             console.error('Failed to reload dog info:', error);
@@ -135,10 +261,40 @@ export default function WithDogPage() {
   };
 
   // 保存狗狗信息（从弹窗提交）
-  const handleSaveDogInfo = (data: DogInfo) => {
-    localStorage.setItem('petbrain_dog_info', JSON.stringify(data));
-    setDogInfo(data);
-    setShowInfoModal(false);
+  const handleSaveDogInfo = async (data: DogInfo) => {
+    try {
+      // 自动计算当前天数
+      if (data.homeDate) {
+        data.daysHome = calculateDaysHome(data.homeDate);
+      }
+
+      // 保存到 Supabase
+      if (userId) {
+        await saveToSupabase(userId, {
+          breed: data.breed,
+          age_months: data.ageMonths,
+          companion_hours: data.companionHours,
+          home_date: data.homeDate,
+        });
+        console.log('✅ 狗狗信息已保存到 Supabase');
+      }
+
+      // 同步到 localStorage（用于降级）
+      localStorage.setItem('petbrain_dog_info', JSON.stringify(data));
+
+      setDogInfo(data);
+      setShowInfoModal(false);
+    } catch (error) {
+      console.error('❌ 保存狗狗信息失败:', error);
+
+      // 降级方案：至少保存到 localStorage
+      localStorage.setItem('petbrain_dog_info', JSON.stringify(data));
+      setDogInfo(data);
+      setShowInfoModal(false);
+
+      // 可选：显示错误提示
+      setError('数据已保存到本地，但同步到云端失败');
+    }
   };
 
   // 关闭弹窗处理（新用户必须填写信息）
@@ -150,7 +306,7 @@ export default function WithDogPage() {
   };
 
   // 解析今日卡片内容
-  const parseDailyCard = (content: string): boolean => {
+  const parseDailyCard = async (content: string): Promise<boolean> => {
     try {
       const focusMatch = content.match(/✅\s*今天最需要关注的事[：:]?\s*\n([\s\S]*?)(?=\n*❌|$)/);
       const forbiddenMatch = content.match(/❌\s*今天容易犯的错误[：:]?\s*\n([\s\S]*?)(?=\n*ℹ️|$)/);
@@ -164,8 +320,21 @@ export default function WithDogPage() {
         };
 
         setDailyCard(dailyCardData);
+
+        // 保存到 Supabase
+        if (userId) {
+          try {
+            await saveTodayCard(userId, dailyCardData);
+            console.log('✅ 今日卡片已保存到 Supabase');
+          } catch (error) {
+            console.error('⚠️ 保存今日卡片到 Supabase 失败:', error);
+          }
+        }
+
+        // 同步到 localStorage（用于降级）
         localStorage.setItem('petbrain_daily_card', JSON.stringify(dailyCardData));
         localStorage.setItem('petbrain_daily_card_date', new Date().toDateString());
+
         return true;
       }
       return false;
@@ -394,7 +563,7 @@ export default function WithDogPage() {
       <DogInfoModal
         isOpen={showInfoModal}
         onClose={handleCloseModal}
-        initialData={dogInfo || undefined}
+        initialData={dogInfo || (extractedInfo as DogInfo | undefined)}
         onSubmit={handleSaveDogInfo}
       />
     </div>

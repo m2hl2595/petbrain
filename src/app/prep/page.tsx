@@ -1,8 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { setUserStage } from '@/lib/storage';
+import ChatMessageBubble from '@/components/ChatMessageBubble';
+import ChatInputArea from '@/components/ChatInputArea';
+import { DogInfoExtractor } from '@/lib/dogInfoExtractor';
 
 // 消息类型定义
 interface Message {
@@ -10,14 +13,30 @@ interface Message {
   content: string;
 }
 
+// 提取的狗狗信息类型
+interface ExtractedDogInfo {
+  breed: string | null;
+  ageMonths: string | null;
+  companionHours: string | null;
+}
+
 export default function PrepPage() {
   const router = useRouter();
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+
   const [inputValue, setInputValue] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [checklistGenerated, setChecklistGenerated] = useState(false);
+
+  // 自动滚动到底部
+  useEffect(() => {
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
+    }
+  }, [messages, isLoading]);
 
   // 发送消息（支持传递shouldGenerate参数）
   const handleSend = async (shouldGenerate = false) => {
@@ -30,12 +49,36 @@ export default function PrepPage() {
       ? '请根据我们的对话生成准备清单'
       : userMessage;
 
+    // 🔥 实时提取狗狗信息（基于确定性意图识别）
+    if (!shouldGenerate) {
+      const extracted = DogInfoExtractor.extract(userMessage);
+
+      // 读取已存储的信息
+      const savedInfo = localStorage.getItem('extracted_dog_info');
+      const currentInfo: ExtractedDogInfo = savedInfo
+        ? JSON.parse(savedInfo)
+        : { breed: null, ageMonths: null, companionHours: null };
+
+      // 合并新提取的信息（只覆盖非空值）
+      const updatedInfo: ExtractedDogInfo = {
+        breed: extracted.breed || currentInfo.breed,
+        ageMonths: extracted.ageMonths || currentInfo.ageMonths,
+        companionHours: extracted.companionHours || currentInfo.companionHours,
+      };
+
+      // 如果提取到任何信息，保存到 localStorage
+      if (extracted.breed || extracted.ageMonths || extracted.companionHours) {
+        localStorage.setItem('extracted_dog_info', JSON.stringify(updatedInfo));
+        console.log('✅ 提取到狗狗信息:', extracted);
+      }
+    }
+
     // 添加用户消息到对话历史
     const newUserMessage: Message = {
       role: 'user',
       content: actualMessage,
     };
-    setMessages(prev => [...prev, newUserMessage]);
+    setMessages((prev) => [...prev, newUserMessage]);
 
     setInputValue('');
     setError('');
@@ -52,8 +95,8 @@ export default function PrepPage() {
           conversation_id: conversationId,
           // 关键：通过会话变量控制LLM行为
           variables: {
-            shouldGenerateChecklist: shouldGenerate ? 'true' : 'false'
-          }
+            shouldGenerateChecklist: shouldGenerate ? 'true' : 'false',
+          },
         }),
       });
 
@@ -74,13 +117,12 @@ export default function PrepPage() {
         role: 'assistant',
         content: data.answer,
       };
-      setMessages(prev => [...prev, newAssistantMessage]);
+      setMessages((prev) => [...prev, newAssistantMessage]);
 
       // 如果生成了清单，标记状态
       if (shouldGenerate) {
         setChecklistGenerated(true);
       }
-
     } catch (err) {
       setError('网络错误，请稍后再试');
       console.error('Send message error:', err);
@@ -95,14 +137,6 @@ export default function PrepPage() {
     handleSend(true);
   };
 
-  // 处理Enter键发送
-  const handleKeyPress = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSend(false);
-    }
-  };
-
   const handleStageSwitch = (stage: 'explore' | 'withDog') => {
     setUserStage(stage);
     const routeMap = {
@@ -113,136 +147,165 @@ export default function PrepPage() {
   };
 
   return (
-    <div className="min-h-screen p-8">
-      <div className="max-w-3xl mx-auto">
-        <h1 className="text-3xl font-semibold mb-4">
-          倒计时开始了，准备好迎接新成员
-        </h1>
-        <p className="text-gray-600 mb-8">
-          你正处于准备阶段，你可以问我任何关于养狗准备的问题
-        </p>
+    <div className="h-screen flex flex-col bg-[#FAFAFA]">
+      {/* Sticky Header - 主题色点缀 */}
+      <div className="sticky top-0 z-50 bg-[#FAFAFA] border-b-[1.5px] border-[#E5E5E5]">
+        <div className="max-w-2xl mx-auto px-4 py-4">
+          <div className="flex items-center justify-between">
+            {/* 左侧：标题 */}
+            <h2 className="text-2xl font-semibold text-[#1A1A1A]">
+              准备阶段
+            </h2>
 
-        {/* 对话历史区 */}
-        {messages.length > 0 && (
-          <div className="mb-8 space-y-4">
-            {messages.map((message, index) => (
+            {/* 右侧：主题色标签 */}
+            <div className="flex items-center gap-2">
               <div
-                key={index}
-                className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
-              >
-                <div
-                  className={`max-w-[80%] p-4 rounded-lg ${
-                    message.role === 'user'
-                      ? 'bg-gray-900 text-white'
-                      : 'bg-gradient-to-br from-blue-50 to-indigo-50 text-gray-800 border border-blue-100'
-                  }`}
-                >
-                  <div className="whitespace-pre-wrap">{message.content}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Loading状态 */}
-        {isLoading && (
-          <div className="mb-8 flex justify-start">
-            <div className="max-w-[80%] p-4 rounded-lg bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-100">
-              <p className="text-gray-600">正在思考...</p>
+                className="w-3 h-3 rounded-full"
+                style={{ backgroundColor: '#718072' }}
+              />
+              <span className="text-sm text-[#666666]">有序准备</span>
             </div>
           </div>
-        )}
 
-        {/* 错误提示 */}
-        {error && (
-          <div className="mb-8 p-4 bg-red-50 rounded-lg border border-red-200">
-            <p className="text-red-600">{error}</p>
-          </div>
-        )}
-
-        {/* 生成清单按钮区（未生成清单时显示） */}
-        {!checklistGenerated && messages.length > 0 && (
-          <div className="mb-8 p-6 bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg border border-purple-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-800 font-medium mb-1">
-                  💡 准备好了吗？
-                </p>
-                <p className="text-gray-600 text-sm">
-                  点击下方按钮，我会根据我们的对话生成专属准备清单
-                </p>
-              </div>
-              <button
-                onClick={handleGenerateChecklist}
-                disabled={isLoading}
-                className="ml-4 px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors whitespace-nowrap font-medium"
-              >
-                📋 生成清单
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* 已生成清单提示 */}
-        {checklistGenerated && (
-          <div className="mb-8 p-4 bg-green-50 rounded-lg border border-green-200">
-            <p className="text-green-800">
-              ✅ 清单已生成！你还可以继续咨询其他问题。
-            </p>
-          </div>
-        )}
-
-        {/* 输入区 */}
-        <div className="mb-12">
-          <div className="space-y-3">
-            <textarea
-              value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
-              onKeyPress={handleKeyPress}
-              placeholder={
-                messages.length === 0
-                  ? "比如：我想养一只金毛，家里有小孩..."
-                  : "继续提问或聊天..."
-              }
-              className="w-full p-4 border border-gray-300 rounded-lg resize-none focus:outline-none focus:border-gray-500 focus:ring-2 focus:ring-gray-200"
-              rows={4}
-              disabled={isLoading}
-            />
-            <div className="flex items-center justify-between">
-              <p className="text-sm text-gray-500">
-                {messages.length === 0
-                  ? "💬 开始对话，我会帮你规划准备工作"
-                  : "按 Enter 发送，Shift + Enter 换行"}
-              </p>
-              <button
-                onClick={() => handleSend(false)}
-                disabled={isLoading || !inputValue.trim()}
-                className="px-6 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
-              >
-                {isLoading ? '发送中...' : '发送'}
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* 阶段切换旁路提示（弱存在） */}
-        <div className="mt-24 pt-8 border-t border-gray-200">
-          <p className="text-sm text-gray-400 mb-2">
-            如果情况有变，你可以：
+          {/* 副标题 */}
+          <p className="text-sm text-[#666666] mt-2">
+            倒计时开始了，准备好迎接新成员。你可以问我任何关于养狗准备的问题
           </p>
-          <div className="flex gap-4 text-sm">
-            <button
-              onClick={() => handleStageSwitch('explore')}
-              className="text-gray-400 hover:text-gray-600 underline"
+        </div>
+      </div>
+
+      {/* 可滚动内容区域 */}
+      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto">
+        <div className="max-w-2xl mx-auto px-4 py-8 space-y-8">
+          {/* 欢迎提示（首次进入） */}
+          {messages.length === 0 && (
+            <div className="p-6 bg-white border border-[#E5E5E5] rounded-2xl">
+              <h3 className="text-lg font-semibold text-[#1A1A1A] mb-3">
+                📋 欢迎来到准备阶段
+              </h3>
+              <p className="text-sm text-[#666666] leading-relaxed mb-4">
+                如果你已经选好狗狗，准备好迎接它的到来了吗？在这里，你可以：
+              </p>
+              <ul className="space-y-2 text-sm text-[#666666]">
+                <li className="flex items-start gap-2">
+                  <span className="text-[#718072] mt-0.5">•</span>
+                  <span>咨询养狗准备的具体事项</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-[#718072] mt-0.5">•</span>
+                  <span>了解需要购买的物品清单</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-[#718072] mt-0.5">•</span>
+                  <span>生成专属的准备清单</span>
+                </li>
+              </ul>
+            </div>
+          )}
+
+          {/* 对话历史 */}
+          {messages.length > 0 && (
+            <div className="space-y-4">
+              {messages.map((message, index) => (
+                <ChatMessageBubble
+                  key={index}
+                  role={message.role}
+                  content={message.content}
+                />
+              ))}
+            </div>
+          )}
+
+          {/* Loading状态 */}
+          {isLoading && (
+            <div className="flex justify-start">
+              <div className="px-4 py-2.5 bg-white border border-[#E5E5E5] rounded-lg">
+                <p className="text-sm text-[#A3A3A3]">正在思考...</p>
+              </div>
+            </div>
+          )}
+
+          {/* 错误提示 */}
+          {error && (
+            <div className="p-3 bg-white border border-[#DC2626] rounded-lg">
+              <p className="text-sm text-[#DC2626]">{error}</p>
+            </div>
+          )}
+
+          {/* 生成清单按钮区（未生成清单时显示） - 暂时注释掉 */}
+          {/* {!checklistGenerated && messages.length > 0 && (
+            <div
+              className="p-6 bg-white border-[1.5px] rounded-2xl"
+              style={{ borderColor: '#718072' }}
             >
-              回到探索阶段
-            </button>
-            <button
-              onClick={() => handleStageSwitch('withDog')}
-              className="text-gray-400 hover:text-gray-600 underline"
-            >
-              狗狗已经到家了
-            </button>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-[#1A1A1A] font-semibold mb-1">
+                    💡 准备好了吗？
+                  </p>
+                  <p className="text-sm text-[#666666]">
+                    点击下方按钮，我会根据我们的对话生成专属准备清单
+                  </p>
+                </div>
+                <button
+                  onClick={handleGenerateChecklist}
+                  disabled={isLoading}
+                  className="ml-4 px-6 py-3 text-white rounded-xl hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity whitespace-nowrap font-semibold"
+                  style={{ backgroundColor: '#718072' }}
+                >
+                  📋 生成清单
+                </button>
+              </div>
+            </div>
+          )} */}
+
+          {/* 已生成清单提示 - 暂时注释掉 */}
+          {/* {checklistGenerated && (
+            <div className="p-4 bg-white border border-[#10B981] rounded-lg">
+              <p className="text-sm text-[#10B981]">
+                ✅ 清单已生成！你还可以继续咨询其他问题。
+              </p>
+            </div>
+          )} */}
+
+          {/* 底部留白（为固定输入框留空间） */}
+          <div className="h-40" />
+        </div>
+      </div>
+
+      {/* 固定底部输入框 + 阶段导航 */}
+      <div className="border-t border-[#E5E5E5] bg-[#FAFAFA]">
+        <div className="max-w-2xl mx-auto px-4 py-4 space-y-3">
+          {/* 输入区 */}
+          <ChatInputArea
+            value={inputValue}
+            onChange={setInputValue}
+            onSubmit={() => handleSend(false)}
+            isLoading={isLoading}
+            placeholder={
+              messages.length === 0
+                ? '比如：我想养一只金毛，家里有小孩...'
+                : '继续提问或聊天...'
+            }
+          />
+
+          {/* 阶段分流入口（输入框正下方） */}
+          <div className="flex items-center justify-between text-sm">
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => handleStageSwitch('explore')}
+                className="text-[#A3A3A3] hover:text-[#666666] transition-colors duration-200"
+              >
+                ← 回到探索
+              </button>
+              <span className="text-[#E5E5E5]">|</span>
+              <button
+                onClick={() => handleStageSwitch('withDog')}
+                className="text-[#A3A3A3] hover:text-[#666666] transition-colors duration-200"
+              >
+                狗狗已经到家了 →
+              </button>
+            </div>
           </div>
         </div>
       </div>

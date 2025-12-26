@@ -11,7 +11,8 @@ export interface DogInfo {
   breed: string;
   ageMonths: string;
   companionHours: string;
-  daysHome: number;
+  homeDate: string; // 到家日期 (YYYY-MM-DD)
+  daysHome?: number; // 自动计算的天数（可选，用于显示）
 }
 
 interface DogInfoFormProps {
@@ -25,12 +26,18 @@ export default function DogInfoForm({
   onSubmit,
   isLoading = false,
 }: DogInfoFormProps) {
+  // 计算默认到家日期（今天）
+  const getDefaultHomeDate = () => {
+    const today = new Date();
+    return today.toISOString().split('T')[0]; // YYYY-MM-DD
+  };
+
   const [formData, setFormData] = useState<DogInfo>(
     initialData || {
       breed: '',
       ageMonths: '',
       companionHours: '',
-      daysHome: 1,
+      homeDate: getDefaultHomeDate(),
     }
   );
 
@@ -52,8 +59,26 @@ export default function DogInfoForm({
       newErrors.companionHours = '请选择陪伴时间';
     }
 
-    if (formData.daysHome < 1 || formData.daysHome > 30) {
-      newErrors.daysHome = '到家天数需在1-30天之间';
+    if (!formData.homeDate) {
+      newErrors.homeDate = '请选择到家日期';
+    } else {
+      // 验证日期不能超过今天
+      const selectedDate = new Date(formData.homeDate);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      if (selectedDate > today) {
+        newErrors.homeDate = '到家日期不能晚于今天';
+      }
+
+      // 验证日期不能超过30天前
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      thirtyDaysAgo.setHours(0, 0, 0, 0);
+
+      if (selectedDate < thirtyDaysAgo) {
+        newErrors.homeDate = '到家日期不能早于30天前';
+      }
     }
 
     setErrors(newErrors);
@@ -165,29 +190,32 @@ export default function DogInfoForm({
         )}
       </div>
 
-      {/* 字段4: 到家天数 */}
+      {/* 字段4: 到家日期 */}
       <div className="bg-white rounded-xl p-8"
         style={{ border: '1.5px solid #E5E5E5' }}
       >
         <label
-          htmlFor="daysHome"
+          htmlFor="homeDate"
           className="block text-lg font-medium text-[#1A1A1A] mb-2"
         >
-          到家天数
+          到家日期
         </label>
+        <p className="text-sm text-[#666666] mb-3">
+          选择狗狗到家的日期，天数会自动计算
+        </p>
         <input
-          id="daysHome"
-          type="number"
-          min="1"
-          max="30"
-          value={formData.daysHome}
-          onChange={(e) => updateField('daysHome', parseInt(e.target.value) || 1)}
+          id="homeDate"
+          type="date"
+          value={formData.homeDate}
+          onChange={(e) => updateField('homeDate', e.target.value)}
           disabled={isLoading}
+          max={new Date().toISOString().split('T')[0]}
+          min={new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]}
           className="w-full h-12 px-4 text-base text-[#1A1A1A] rounded-lg focus:outline-none disabled:opacity-50"
           style={{ fontSize: '16px', border: '1.5px solid #E5E5E5' }}
         />
-        {errors.daysHome && (
-          <p className="mt-2 text-[13px] text-[#DC2626]">{errors.daysHome}</p>
+        {errors.homeDate && (
+          <p className="mt-2 text-[13px] text-[#DC2626]">{errors.homeDate}</p>
         )}
       </div>
 
