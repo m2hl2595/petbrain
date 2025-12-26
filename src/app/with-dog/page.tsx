@@ -141,6 +141,14 @@ export default function WithDogPage() {
     setShowInfoModal(false);
   };
 
+  // 关闭弹窗处理（新用户必须填写信息）
+  const handleCloseModal = () => {
+    // 如果已有狗狗信息，允许关闭；否则阻止关闭（新用户必填）
+    if (dogInfo) {
+      setShowInfoModal(false);
+    }
+  };
+
   // 解析今日卡片内容
   const parseDailyCard = (content: string): boolean => {
     try {
@@ -379,16 +387,16 @@ export default function WithDogPage() {
               </div>
             </div>
           </div>
-
-          {/* 信息表单弹窗 */}
-          <DogInfoModal
-            isOpen={showInfoModal}
-            onClose={() => setShowInfoModal(false)}
-            initialData={dogInfo || undefined}
-            onSubmit={handleSaveDogInfo}
-          />
         </>
       )}
+
+      {/* 信息表单弹窗 - 独立于dogInfo条件渲染 */}
+      <DogInfoModal
+        isOpen={showInfoModal}
+        onClose={handleCloseModal}
+        initialData={dogInfo || undefined}
+        onSubmit={handleSaveDogInfo}
+      />
     </div>
   );
 }

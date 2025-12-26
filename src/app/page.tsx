@@ -1,12 +1,15 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { getUserStage, setUserStage } from '@/lib/storage';
 import type { UserStage } from '@/types';
+import HeroSection from '@/components/HeroSection';
+import BentoStageCard from '@/components/BentoStageCard';
 
 export default function Home() {
   const router = useRouter();
+  const [activeCard, setActiveCard] = useState<number | null>(null);
 
   useEffect(() => {
     const currentStage = getUserStage();
@@ -32,39 +35,84 @@ export default function Home() {
     router.push(routeMap[stage]);
   };
 
+  // 三个阶段的配置数据（含主题色）
+  const stages = [
+    {
+      id: 1,
+      stage: 'explore' as UserStage,
+      title: '探索阶段',
+      subtitle: '先别急着买！聊聊你的生活，看你真的准备好了吗？',
+      description:
+        '养狗不是一场冲动决定，而是对狗狗和你生活方式的深刻承诺。先与我们聊聊，看看你是否真的准备好了。',
+      buttonText: '开始探索',
+      themeColor: '#64748B', // 理性蓝灰
+    },
+    {
+      id: 2,
+      stage: 'prep' as UserStage,
+      title: '准备阶段',
+      subtitle: '倒计时开始了，准备好迎接新成员！',
+      description:
+        '如果你已经选好狗狗，准备好迎接它的到来了吗？根据你的养狗方式，我们为你准备了一份清单，帮助你有条不紊地为狗狗做准备。',
+      buttonText: '准备迎接',
+      themeColor: '#718072', // 秩序苔绿
+    },
+    {
+      id: 3,
+      stage: 'withDog' as UserStage,
+      title: '陪伴阶段',
+      subtitle: '欢迎来到新生活，它会一直陪着你！',
+      description:
+        '你的狗狗已经到家了吗？回答 5 个问题，我陪你一起度过 30 天适应期。',
+      buttonText: '陪伴计划',
+      themeColor: '#A88876', // 温暖陶土
+    },
+  ];
+
   return (
-    <div className="min-h-screen flex items-center justify-center p-8">
-      <div className="max-w-2xl w-full">
-        <h1 className="text-2xl font-semibold mb-8 text-center">
-          你现在处于哪个阶段？
-        </h1>
+    <div className="min-h-screen bg-[#FAFAFA]">
+      {/* Hero Section */}
+      <HeroSection />
 
-        <div className="flex flex-col gap-4">
-          <button
-            onClick={() => handleStageSelect('explore')}
-            className="p-6 border border-gray-300 rounded-lg hover:border-gray-500 text-left"
-          >
-            <h2 className="text-xl font-medium mb-2">我在纠结要不要养狗</h2>
-            <p className="text-gray-600 text-sm">还在探索阶段</p>
-          </button>
+      {/* 阶段选择区域 */}
+      <section className="w-full py-16 md:py-20 bg-white">
+        <div className="max-w-6xl mx-auto px-6 md:px-8">
+          {/* 区块标题 */}
+          <div className="text-center mb-12">
+            <h2 className="text-2xl md:text-3xl font-bold text-[#1A1A1A] mb-4">
+              选择你的阶段
+            </h2>
+            <p className="text-base md:text-lg text-[#666666]">
+              每个阶段都有专属的陪伴方式，选择最适合你的开始
+            </p>
+          </div>
 
-          <button
-            onClick={() => handleStageSelect('prep')}
-            className="p-6 border border-gray-300 rounded-lg hover:border-gray-500 text-left"
-          >
-            <h2 className="text-xl font-medium mb-2">我已经选好狗了，但还没到家</h2>
-            <p className="text-gray-600 text-sm">准备阶段</p>
-          </button>
-
-          <button
-            onClick={() => handleStageSelect('withDog')}
-            className="p-6 border border-gray-300 rounded-lg hover:border-gray-500 text-left"
-          >
-            <h2 className="text-xl font-medium mb-2">狗已经到家了</h2>
-            <p className="text-gray-600 text-sm">陪伴阶段</p>
-          </button>
+          {/* Bento 手风琴卡片 - 容器约束 (max-width: 1024px) */}
+          <div className="max-w-[1024px] mx-auto">
+            <div className="flex flex-col md:flex-row gap-6 md:gap-4">
+              {stages.map((stage) => (
+                <BentoStageCard
+                  key={stage.id}
+                  stageNumber={stage.id}
+                  title={stage.title}
+                  subtitle={stage.subtitle}
+                  description={stage.description}
+                  buttonText={stage.buttonText}
+                  themeColor={stage.themeColor}
+                  onClick={() => handleStageSelect(stage.stage)}
+                  isActive={activeCard === stage.id}
+                  onHover={(isHovered) => {
+                    setActiveCard(isHovered ? stage.id : null);
+                  }}
+                />
+              ))}
+            </div>
+          </div>
         </div>
-      </div>
+      </section>
+
+      {/* Footer 留白 */}
+      <div className="h-20 bg-[#FAFAFA]" />
     </div>
   );
 }
