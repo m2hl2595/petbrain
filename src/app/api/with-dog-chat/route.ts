@@ -1,5 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+// Dify API 请求体类型定义
+interface DifyRequestBody {
+  inputs: {
+    breed: string;
+    ageMonths: string;
+    companionHours: string;
+    daysHome: string;
+    generateDailyCard: string;
+  };
+  query: string;
+  response_mode: string;
+  user: string;
+  conversation_id?: string;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -37,7 +52,7 @@ export async function POST(request: NextRequest) {
     }
 
     console.log('Calling Dify API with query:', query);
-    const requestBody: any = {
+    const requestBody: DifyRequestBody = {
       // 传递5个Input Variables到Dify
       inputs: {
         breed: dogInfo.breed,

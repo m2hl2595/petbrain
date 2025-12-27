@@ -1,5 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+// Dify API 请求体类型定义
+interface DifyRequestBody {
+  inputs: Record<string, string>;
+  query: string;
+  response_mode: string;
+  user: string;
+  conversation_id?: string;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -28,7 +37,7 @@ export async function POST(request: NextRequest) {
     }
 
     console.log('Calling Dify API with query:', query);
-    const requestBody: any = {
+    const requestBody: DifyRequestBody = {
       // 传递输入变量到Dify（用于控制LLM行为）
       inputs: variables || {
         shouldGenerateChecklist: 'false'  // 默认值：字符串 "false"

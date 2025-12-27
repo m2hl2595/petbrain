@@ -1,33 +1,33 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import DogInfoForm, { DogInfo } from '@/components/DogInfoForm';
 
 export default function EditDogInfoPage() {
   const router = useRouter();
-  const [initialData, setInitialData] = useState<DogInfo | undefined>(undefined);
-  const [isFirstTime, setIsFirstTime] = useState(true);
 
-  // 页面加载时：从localStorage读取数据
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
+  // 使用 lazy initialization 从 localStorage 读取初始数据（避免 effect 中 setState）
+  const [initialData] = useState<DogInfo | undefined>(() => {
+    if (typeof window === 'undefined') return undefined;
 
     const savedDogInfo = localStorage.getItem('petbrain_dog_info');
-
     if (savedDogInfo) {
       try {
-        const parsed = JSON.parse(savedDogInfo);
-        setInitialData(parsed);
-        setIsFirstTime(false);
+        return JSON.parse(savedDogInfo);
       } catch (error) {
         console.error('Failed to parse dog info from localStorage:', error);
-        setIsFirstTime(true);
+        return undefined;
       }
-    } else {
-      setIsFirstTime(true);
     }
-  }, []);
+    return undefined;
+  });
+
+  const [isFirstTime] = useState(() => {
+    if (typeof window === 'undefined') return true;
+    const savedDogInfo = localStorage.getItem('petbrain_dog_info');
+    return !savedDogInfo;
+  });
 
   // 提交表单
   const handleSubmit = (data: DogInfo) => {

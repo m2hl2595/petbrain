@@ -2,13 +2,12 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import dynamic from 'next/dynamic';
 import { setUserStage } from '@/lib/storage';
 import DailyFocusCard from '@/components/DailyFocusCard';
 import DailyCardBentoTab from '@/components/DailyCardBentoTab';
-import DailyCardOverlay from '@/components/DailyCardOverlay';
 import ChatMessageBubble from '@/components/ChatMessageBubble';
 import ChatInputArea from '@/components/ChatInputArea';
-import DogInfoModal from '@/components/DogInfoModal';
 import {
   getOrCreateUser,
   getDogInfo,
@@ -16,6 +15,14 @@ import {
   getTodayCard,
   saveTodayCard,
 } from '@/lib/supabase';
+
+// 懒加载弹窗和覆盖层组件（减少初始加载体积）
+const DailyCardOverlay = dynamic(() => import('@/components/DailyCardOverlay'), {
+  ssr: false,
+});
+const DogInfoModal = dynamic(() => import('@/components/DogInfoModal'), {
+  ssr: false,
+});
 
 // TypeScript类型定义
 interface DogInfo {

@@ -29,7 +29,6 @@ export default function PrepPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [conversationId, setConversationId] = useState<string | null>(null);
-  const [checklistGenerated, setChecklistGenerated] = useState(false);
 
   // 页面加载时从localStorage读取对话历史
   useEffect(() => {
@@ -152,23 +151,12 @@ export default function PrepPage() {
         content: data.answer,
       };
       setMessages((prev) => [...prev, newAssistantMessage]);
-
-      // 如果生成了清单，标记状态
-      if (shouldGenerate) {
-        setChecklistGenerated(true);
-      }
     } catch (err) {
       setError('网络错误，请稍后再试');
       console.error('Send message error:', err);
     } finally {
       setIsLoading(false);
     }
-  };
-
-  // 处理生成清单按钮点击
-  const handleGenerateChecklist = () => {
-    setInputValue('请根据我们的对话生成准备清单');
-    handleSend(true);
   };
 
   const handleStageSwitch = (stage: 'explore' | 'withDog') => {

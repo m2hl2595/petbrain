@@ -346,7 +346,7 @@ export async function handleStageTransition(
 // 导出所有功能
 // ============================================
 
-export default {
+const supabaseAPI = {
   // 客户端
   supabase,
 
@@ -371,3 +371,5 @@ export default {
   // 阶段切换
   handleStageTransition
 };
+
+export default supabaseAPI;
