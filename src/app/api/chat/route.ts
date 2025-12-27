@@ -5,8 +5,9 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     console.log('Received request body:', body);
 
-    const { query } = body;
+    const { query, conversation_id } = body;
     console.log('Query value:', query, 'Type:', typeof query);
+    console.log('Conversation ID:', conversation_id);
 
     if (!query || typeof query !== 'string') {
       console.log('Validation failed: query is empty or not a string');
@@ -25,7 +26,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log('Calling Dify API with query:', query);
+    console.log('Calling Dify API with query:', query, 'conversation_id:', conversation_id);
     const response = await fetch('https://api.dify.ai/v1/chat-messages', {
       method: 'POST',
       headers: {
@@ -37,6 +38,7 @@ export async function POST(request: NextRequest) {
         query: query,
         response_mode: 'blocking',
         user: 'anonymous',
+        conversation_id: conversation_id || undefined, // 传递 conversation_id（首次为空）
       }),
     });
 
@@ -52,9 +54,11 @@ export async function POST(request: NextRequest) {
     }
 
     const data = await response.json();
+    console.log('Dify API返回的conversation_id:', data.conversation_id);
 
     return NextResponse.json({
       answer: data.answer || '没有收到回复',
+      conversation_id: data.conversation_id, // 返回 conversation_id 给前端
     });
 
   } catch (error) {

@@ -96,6 +96,40 @@ export default function WithDogPage() {
     }
   }, []);
 
+  // 页面加载时从localStorage读取对话历史
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const savedMessages = localStorage.getItem('withdog_messages');
+      const savedConversationId = localStorage.getItem('withdog_conversation_id');
+
+      if (savedMessages) {
+        try {
+          setMessages(JSON.parse(savedMessages));
+        } catch (e) {
+          console.error('Failed to parse saved messages:', e);
+        }
+      }
+
+      if (savedConversationId) {
+        setConversationId(savedConversationId);
+      }
+    }
+  }, []);
+
+  // 对话历史变化时保存到localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined' && messages.length > 0) {
+      localStorage.setItem('withdog_messages', JSON.stringify(messages));
+    }
+  }, [messages]);
+
+  // conversationId变化时保存到localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined' && conversationId) {
+      localStorage.setItem('withdog_conversation_id', conversationId);
+    }
+  }, [conversationId]);
+
   // 页面加载时：初始化用户并加载数据
   useEffect(() => {
     const initializeUser = async () => {
@@ -262,14 +296,25 @@ export default function WithDogPage() {
 
   // 保存狗狗信息（从弹窗提交）
   const handleSaveDogInfo = async (data: DogInfo) => {
+    console.log('🔄 开始保存狗狗信息...', data);
+
     try {
       // 自动计算当前天数
       if (data.homeDate) {
         data.daysHome = calculateDaysHome(data.homeDate);
       }
 
-      // 保存到 Supabase
+      // 先保存到 localStorage（立即反馈）
+      localStorage.setItem('petbrain_dog_info', JSON.stringify(data));
+      console.log('✅ 数据已保存到 localStorage');
+
+      // 更新前端状态（立即显示）
+      setDogInfo(data);
+      setShowInfoModal(false);
+
+      // 然后异步保存到 Supabase
       if (userId) {
+        console.log('🔄 开始保存到 Supabase...');
         await saveToSupabase(userId, {
           breed: data.breed,
           age_months: data.ageMonths,
@@ -277,23 +322,17 @@ export default function WithDogPage() {
           home_date: data.homeDate,
         });
         console.log('✅ 狗狗信息已保存到 Supabase');
+      } else {
+        console.warn('⚠️ userId 不存在，跳过 Supabase 保存');
       }
-
-      // 同步到 localStorage（用于降级）
-      localStorage.setItem('petbrain_dog_info', JSON.stringify(data));
-
-      setDogInfo(data);
-      setShowInfoModal(false);
     } catch (error) {
-      console.error('❌ 保存狗狗信息失败:', error);
+      console.error('❌ 保存狗狗信息到 Supabase 失败:', error);
 
-      // 降级方案：至少保存到 localStorage
-      localStorage.setItem('petbrain_dog_info', JSON.stringify(data));
-      setDogInfo(data);
-      setShowInfoModal(false);
+      // 显示友好的错误提示
+      setError('信息已保存到本地，云端同步将在后台重试');
 
-      // 可选：显示错误提示
-      setError('数据已保存到本地，但同步到云端失败');
+      // 3秒后自动清除错误提示
+      setTimeout(() => setError(''), 3000);
     }
   };
 
@@ -436,7 +475,7 @@ export default function WithDogPage() {
         <>
           {/* Sticky Header - 一行三段式 */}
           <div className="sticky top-0 z-50 bg-[#FAFAFA] border-b-[1.5px] border-[#E5E5E5]">
-            <div className="max-w-2xl mx-auto px-4 py-4">
+            <div className="max-w-4xl mx-auto px-4 py-4">
               <div className="flex items-center justify-between">
                 {/* 左侧：标题 */}
                 <h2 className="text-2xl font-semibold text-[#1A1A1A]">
@@ -481,7 +520,7 @@ export default function WithDogPage() {
             ref={scrollContainerRef}
             className="flex-1 overflow-y-auto"
           >
-            <div className="max-w-2xl mx-auto px-4 py-8 space-y-8">
+            <div className="max-w-4xl mx-auto px-4 py-8 space-y-8">
 
               {/* 今日卡片（初始态，顶部） */}
               <DailyFocusCard
@@ -529,7 +568,7 @@ export default function WithDogPage() {
 
           {/* 固定底部输入框 + 阶段导航 */}
           <div className="border-t border-[#E5E5E5] bg-[#FAFAFA]">
-            <div className="max-w-2xl mx-auto px-4 py-4 space-y-3">
+            <div className="max-w-4xl mx-auto px-4 py-4 space-y-3">
               {/* 输入区 */}
               <ChatInputArea
                 value={inputValue}

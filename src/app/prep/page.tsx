@@ -31,6 +31,40 @@ export default function PrepPage() {
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [checklistGenerated, setChecklistGenerated] = useState(false);
 
+  // 页面加载时从localStorage读取对话历史
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const savedMessages = localStorage.getItem('prep_messages');
+      const savedConversationId = localStorage.getItem('prep_conversation_id');
+
+      if (savedMessages) {
+        try {
+          setMessages(JSON.parse(savedMessages));
+        } catch (e) {
+          console.error('Failed to parse saved messages:', e);
+        }
+      }
+
+      if (savedConversationId) {
+        setConversationId(savedConversationId);
+      }
+    }
+  }, []);
+
+  // 对话历史变化时保存到localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined' && messages.length > 0) {
+      localStorage.setItem('prep_messages', JSON.stringify(messages));
+    }
+  }, [messages]);
+
+  // conversationId变化时保存到localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined' && conversationId) {
+      localStorage.setItem('prep_conversation_id', conversationId);
+    }
+  }, [conversationId]);
+
   // 自动滚动到底部
   useEffect(() => {
     if (scrollContainerRef.current) {
@@ -150,7 +184,7 @@ export default function PrepPage() {
     <div className="h-screen flex flex-col bg-[#FAFAFA]">
       {/* Sticky Header - 主题色点缀 */}
       <div className="sticky top-0 z-50 bg-[#FAFAFA] border-b-[1.5px] border-[#E5E5E5]">
-        <div className="max-w-2xl mx-auto px-4 py-4">
+        <div className="max-w-4xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             {/* 左侧：标题 */}
             <h2 className="text-2xl font-semibold text-[#1A1A1A]">
@@ -176,7 +210,7 @@ export default function PrepPage() {
 
       {/* 可滚动内容区域 */}
       <div ref={scrollContainerRef} className="flex-1 overflow-y-auto">
-        <div className="max-w-2xl mx-auto px-4 py-8 space-y-8">
+        <div className="max-w-4xl mx-auto px-4 py-8 space-y-8">
           {/* 欢迎提示（首次进入） */}
           {messages.length === 0 && (
             <div className="p-6 bg-white border border-[#E5E5E5] rounded-2xl">
@@ -275,18 +309,14 @@ export default function PrepPage() {
 
       {/* 固定底部输入框 + 阶段导航 */}
       <div className="border-t border-[#E5E5E5] bg-[#FAFAFA]">
-        <div className="max-w-2xl mx-auto px-4 py-4 space-y-3">
+        <div className="max-w-4xl mx-auto px-4 py-4 space-y-3">
           {/* 输入区 */}
           <ChatInputArea
             value={inputValue}
             onChange={setInputValue}
             onSubmit={() => handleSend(false)}
             isLoading={isLoading}
-            placeholder={
-              messages.length === 0
-                ? '比如：我想养一只金毛，家里有小孩...'
-                : '继续提问或聊天...'
-            }
+            placeholder="输入你的问题..."
           />
 
           {/* 阶段分流入口（输入框正下方） */}

@@ -26,10 +26,17 @@ export default function DogInfoForm({
   onSubmit,
   isLoading = false,
 }: DogInfoFormProps) {
-  // 计算默认到家日期（今天）
+  // 辅助函数：将Date对象转换为本地时区的YYYY-MM-DD字符串
+  const formatLocalDate = (date: Date): string => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  // 计算默认到家日期（今天，使用本地时区）
   const getDefaultHomeDate = () => {
-    const today = new Date();
-    return today.toISOString().split('T')[0]; // YYYY-MM-DD
+    return formatLocalDate(new Date());
   };
 
   const [formData, setFormData] = useState<DogInfo>(
@@ -42,6 +49,14 @@ export default function DogInfoForm({
   );
 
   const [errors, setErrors] = useState<Partial<Record<keyof DogInfo, string>>>({});
+
+  // 预计算今天和30天前的日期（用于input的max和min）
+  const todayDate = formatLocalDate(new Date());
+  const thirtyDaysAgoDate = (() => {
+    const date = new Date();
+    date.setDate(date.getDate() - 30);
+    return formatLocalDate(date);
+  })();
 
   // 验证表单
   const validateForm = (): boolean => {
@@ -62,21 +77,20 @@ export default function DogInfoForm({
     if (!formData.homeDate) {
       newErrors.homeDate = '请选择到家日期';
     } else {
-      // 验证日期不能超过今天
-      const selectedDate = new Date(formData.homeDate);
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
+      // 验证日期不能超过今天（使用本地时区，避免UTC时区问题）
+      const selectedDateStr = formData.homeDate; // YYYY-MM-DD
+      const todayStr = formatLocalDate(new Date());
 
-      if (selectedDate > today) {
+      if (selectedDateStr > todayStr) {
         newErrors.homeDate = '到家日期不能晚于今天';
       }
 
-      // 验证日期不能超过30天前
+      // 验证日期不能早于30天前（使用本地时区）
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-      thirtyDaysAgo.setHours(0, 0, 0, 0);
+      const thirtyDaysAgoStr = formatLocalDate(thirtyDaysAgo);
 
-      if (selectedDate < thirtyDaysAgo) {
+      if (selectedDateStr < thirtyDaysAgoStr) {
         newErrors.homeDate = '到家日期不能早于30天前';
       }
     }
@@ -209,8 +223,8 @@ export default function DogInfoForm({
           value={formData.homeDate}
           onChange={(e) => updateField('homeDate', e.target.value)}
           disabled={isLoading}
-          max={new Date().toISOString().split('T')[0]}
-          min={new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]}
+          max={todayDate}
+          min={thirtyDaysAgoDate}
           className="w-full h-12 px-4 text-base text-[#1A1A1A] rounded-lg focus:outline-none disabled:opacity-50"
           style={{ fontSize: '16px', border: '1.5px solid #E5E5E5' }}
         />

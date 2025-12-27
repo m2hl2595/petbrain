@@ -47,7 +47,7 @@ export default function EditDogInfoPage() {
         {/* 页面头部 */}
         <div className="mb-8 md:mb-12">
           <h1 className="text-3xl md:text-4xl font-semibold text-[#1A1A1A] mb-3">
-            {isFirstTime ? '告诉我关于你的狗狗' : '修改狗狗信息'}
+            {isFirstTime ? '告诉我关于你的狗狗' : '确认狗狗信息'}
           </h1>
           <p className="text-base text-[#666666]">
             {isFirstTime

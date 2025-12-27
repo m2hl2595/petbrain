@@ -71,7 +71,7 @@ export default function DogInfoModal({
         {/* 标题栏 */}
         <div className="flex items-center justify-between px-6 py-5 border-b-[1.5px] border-[#E5E5E5]">
           <h2 className="text-xl font-semibold text-[#1A1A1A]">
-            {initialData ? '修改狗狗信息' : '填写狗狗信息'}
+            {initialData ? '确认狗狗信息' : '填写狗狗信息'}
           </h2>
           <button
             onClick={onClose}
